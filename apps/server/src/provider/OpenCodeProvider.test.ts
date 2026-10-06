@@ -104,6 +104,11 @@ it.effect("reads a Go API key from OpenCode 2's credential database", () =>
     const fs = yield* FileSystem.FileSystem;
     const dataHome = yield* fs.makeTempDirectoryScoped();
     yield* fs.makeDirectory(`${dataHome}/opencode`);
+    // A stale OpenCode 1 key left in auth.json must lose to the database.
+    yield* fs.writeFileString(
+      `${dataHome}/opencode/auth.json`,
+      JSON.stringify({ "opencode-go": { type: "api", key: "stale-file-key" } }),
+    );
     const database = new NodeSqlite.DatabaseSync(`${dataHome}/opencode/opencode.db`);
     database.exec(
       "CREATE TABLE credential (integration_id text, value text, active integer, time_updated integer)",
@@ -112,8 +117,8 @@ it.effect("reads a Go API key from OpenCode 2's credential database", () =>
     // A Console login and an inactive Go key must lose to the active Go key,
     // even when the inactive one is newer.
     insert.run("opencode", JSON.stringify({ type: "oauth", access: "console-token" }), 1, 3);
-    insert.run("opencode-go", JSON.stringify({ type: "api", key: "old-key" }), 0, 9);
-    insert.run("opencode-go", JSON.stringify({ type: "api", key: "db-key" }), 1, 1);
+    insert.run("opencode-go", JSON.stringify({ type: "key", key: "old-key" }), 0, 9);
+    insert.run("opencode-go", JSON.stringify({ type: "key", key: "db-key" }), 1, 1);
     database.close();
 
     const resetsAt = "2026-09-17T12:00:00.000Z";
