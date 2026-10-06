@@ -21,7 +21,11 @@ import {
 const AuthFile = Schema.Struct({ "opencode-go": Schema.optionalKey(Schema.Unknown) });
 const ApiAuth = Schema.Struct({ type: Schema.Literal("api"), key: Schema.String });
 const decodeAuthFile = Schema.decodeEffect(Schema.fromJsonString(AuthFile));
-const decodeApiAuth = Schema.decodeUnknownOption(ApiAuth);
+// A blank key is no key, so it must not mask the OPENCODE_API_KEY fallback.
+const hasKey = Option.filter((auth: typeof ApiAuth.Type) => auth.key.trim() !== "");
+const decodeUnknownApiAuth = Schema.decodeUnknownOption(ApiAuth);
+const decodeApiAuth = (input: unknown) => hasKey(decodeUnknownApiAuth(input));
+const decodeStoredApiAuth = Schema.decodeOption(Schema.fromJsonString(ApiAuth));
 const UsageWindow = Schema.Struct({
   percent: Schema.Finite,
   resetsAt: Schema.DateTimeUtcFromString,
@@ -42,11 +46,11 @@ const readStoredGoApiKey = (databasePath: string) =>
       database.exec("PRAGMA busy_timeout = 100");
       const row = database
         .prepare(
-          "SELECT value FROM credential WHERE integration_id = 'opencode-go' ORDER BY active DESC, time_updated DESC LIMIT 1",
+          "SELECT value FROM credential WHERE integration_id = 'opencode-go' AND active = 1 ORDER BY time_updated DESC LIMIT 1",
         )
         .get();
       return typeof row?.value === "string"
-        ? decodeApiAuth(JSON.parse(row.value) as unknown)
+        ? hasKey(decodeStoredApiAuth(row.value))
         : Option.none();
     } finally {
       database.close();

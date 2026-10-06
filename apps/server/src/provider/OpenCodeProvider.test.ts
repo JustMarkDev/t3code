@@ -109,9 +109,10 @@ it.effect("reads a Go API key from OpenCode 2's credential database", () =>
       "CREATE TABLE credential (integration_id text, value text, active integer, time_updated integer)",
     );
     const insert = database.prepare("INSERT INTO credential VALUES (?, ?, ?, ?)");
-    // A Console login and an inactive Go key must lose to the active Go key.
+    // A Console login and an inactive Go key must lose to the active Go key,
+    // even when the inactive one is newer.
     insert.run("opencode", JSON.stringify({ type: "oauth", access: "console-token" }), 1, 3);
-    insert.run("opencode-go", JSON.stringify({ type: "api", key: "old-key" }), 0, 2);
+    insert.run("opencode-go", JSON.stringify({ type: "api", key: "old-key" }), 0, 9);
     insert.run("opencode-go", JSON.stringify({ type: "api", key: "db-key" }), 1, 1);
     database.close();
 
