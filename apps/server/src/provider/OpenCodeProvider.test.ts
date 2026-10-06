@@ -1,4 +1,5 @@
 import * as NodeAssert from "node:assert/strict";
+import * as NodeSqlite from "node:sqlite";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
@@ -96,6 +97,47 @@ it.effect("reads Go limits with the instance's XDG credentials and preserves res
       ],
     );
   }),
+);
+
+it.effect("reads a Go API key from OpenCode 2's credential database", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const dataHome = yield* fs.makeTempDirectoryScoped();
+    yield* fs.makeDirectory(`${dataHome}/opencode`);
+    const database = new NodeSqlite.DatabaseSync(`${dataHome}/opencode/opencode.db`);
+    database.exec(
+      "CREATE TABLE credential (integration_id text, value text, active integer, time_updated integer)",
+    );
+    const insert = database.prepare("INSERT INTO credential VALUES (?, ?, ?, ?)");
+    // A Console login and an inactive Go key must lose to the active Go key.
+    insert.run("opencode", JSON.stringify({ type: "oauth", access: "console-token" }), 1, 3);
+    insert.run("opencode-go", JSON.stringify({ type: "api", key: "old-key" }), 0, 2);
+    insert.run("opencode-go", JSON.stringify({ type: "api", key: "db-key" }), 1, 1);
+    database.close();
+
+    const resetsAt = "2026-09-17T12:00:00.000Z";
+    const window = { percent: 1, resetsAt };
+    const limits = yield* readOpenCodeGoUsageLimits({
+      enabled: true,
+      serverUrl: "",
+      environment: { XDG_DATA_HOME: dataHome, OPENCODE_API_KEY: "env-key" },
+    }).pipe(
+      Effect.provideService(
+        HttpClient.HttpClient,
+        HttpClient.make((request) => {
+          NodeAssert.equal(request.headers.authorization, "Bearer db-key");
+          return Effect.succeed(
+            HttpClientResponse.fromWeb(
+              request,
+              Response.json({ usage: { rolling: window, weekly: window, monthly: window } }),
+            ),
+          );
+        }),
+      ),
+    );
+    NodeAssert.equal(limits.unavailable, undefined);
+    NodeAssert.equal(limits.windows.length, 3);
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
 
 it.effect("does not read local credentials for external or disabled OpenCode instances", () =>

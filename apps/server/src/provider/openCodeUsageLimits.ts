@@ -1,4 +1,5 @@
 import * as NodeOS from "node:os";
+import * as NodeSqlite from "node:sqlite";
 
 import type { ServerProviderUsageWindow } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
@@ -29,6 +30,29 @@ const UsageResponse = Schema.Struct({
   usage: Schema.Struct({ rolling: UsageWindow, weekly: UsageWindow, monthly: UsageWindow }),
 });
 
+/**
+ * OpenCode 2 stores credentials in its SQLite database instead of auth.json. A
+ * Console login is a separate OAuth row under another integration, so only a
+ * Go API key row is usable here.
+ */
+const readStoredGoApiKey = (databasePath: string) =>
+  Effect.try(() => {
+    const database = new NodeSqlite.DatabaseSync(databasePath, { readOnly: true });
+    try {
+      database.exec("PRAGMA busy_timeout = 100");
+      const row = database
+        .prepare(
+          "SELECT value FROM credential WHERE integration_id = 'opencode-go' ORDER BY active DESC, time_updated DESC LIMIT 1",
+        )
+        .get();
+      return typeof row?.value === "string"
+        ? decodeApiAuth(JSON.parse(row.value) as unknown)
+        : Option.none();
+    } finally {
+      database.close();
+    }
+  }).pipe(Effect.orElseSucceed(() => Option.none<typeof ApiAuth.Type>()));
+
 /** External OpenCode servers own their credentials; never read the host's account for them. */
 export const readOpenCodeGoUsageLimits = Effect.fn("readOpenCodeGoUsageLimits")(function* (input: {
   readonly enabled: boolean;
@@ -56,7 +80,10 @@ export const readOpenCodeGoUsageLimits = Effect.fn("readOpenCodeGoUsageLimits")(
         }),
       ));
     const auth = yield* decodeAuthFile(contents);
-    const apiAuth = decodeApiAuth(auth["opencode-go"]);
+    const fileAuth = decodeApiAuth(auth["opencode-go"]);
+    const apiAuth = Option.isSome(fileAuth)
+      ? fileAuth
+      : yield* readStoredGoApiKey(path.join(dataHome, "opencode", "opencode.db"));
     // OpenCode overlays stored API credentials after environment credentials.
     const apiKey = (Option.isSome(apiAuth) ? apiAuth.value.key : env.OPENCODE_API_KEY)?.trim();
     if (!apiKey) return unsupported;
