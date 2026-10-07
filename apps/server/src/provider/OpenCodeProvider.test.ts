@@ -119,6 +119,8 @@ it.effect("reads a Go API key from OpenCode 2's credential database", () =>
     insert.run("opencode", JSON.stringify({ type: "oauth", access: "console-token" }), 1, 3);
     insert.run("opencode-go", JSON.stringify({ type: "key", key: "old-key" }), 0, 9);
     insert.run("opencode-go", JSON.stringify({ type: "key", key: "db-key" }), 1, 1);
+    // A newer legacy row (NULL active) ranks behind an explicitly active one.
+    insert.run("opencode-go", JSON.stringify({ type: "key", key: "legacy-key" }), null, 8);
     database.close();
 
     const resetsAt = "2026-09-17T12:00:00.000Z";

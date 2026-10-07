@@ -39,7 +39,8 @@ const UsageResponse = Schema.Struct({
 /**
  * OpenCode 2 stores credentials in its SQLite database instead of auth.json. A
  * Console login is a separate OAuth row under another integration, so only a
- * Go API key row is usable here.
+ * Go API key row is usable here. Rows with a NULL `active` predate the flag and
+ * stay eligible, behind any explicitly active row.
  */
 const readStoredGoApiKey = (databasePath: string) =>
   Effect.try(() => {
@@ -48,7 +49,7 @@ const readStoredGoApiKey = (databasePath: string) =>
       database.exec("PRAGMA busy_timeout = 100");
       const row = database
         .prepare(
-          "SELECT value FROM credential WHERE integration_id = 'opencode-go' AND active = 1 ORDER BY time_updated DESC LIMIT 1",
+          "SELECT value FROM credential WHERE integration_id = 'opencode-go' AND active IS NOT 0 ORDER BY active IS NOT NULL DESC, time_updated DESC LIMIT 1",
         )
         .get();
       return typeof row?.value === "string" ? hasKey(decodeStoredKey(row.value)) : Option.none();
