@@ -124,7 +124,11 @@ export default defineConfig({
       "apps/mobile/uniwind-types.d.ts",
     ],
     plugins: ["eslint", "oxc", "react", "unicorn", "typescript"],
-    jsPlugins: ["./oxlint-plugin-t3code/index.ts", "@shadcn/lint"],
+    jsPlugins: [
+      "./oxlint-plugin-t3code/index.ts",
+      "@shadcn/lint",
+      { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
+    ],
     settings: {
       shadcn: { ui: "~/components/ui" },
     },
@@ -134,6 +138,7 @@ export default defineConfig({
       perf: "warn",
     },
     rules: {
+      "vite-plus/prefer-vite-plus-imports": "error",
       "unicorn/no-array-sort": "off",
       "unicorn/consistent-function-scoping": "off",
       "oxc/no-map-spread": "off",
