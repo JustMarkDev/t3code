@@ -1,4 +1,3 @@
-import * as NodeOS from "node:os";
 import * as NodeSqlite from "node:sqlite";
 
 import type { ServerProviderUsageWindow } from "@t3tools/contracts";
@@ -10,13 +9,16 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Hex from "effect/encoding/Hex";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
 
 import {
   clampPercent,
   makeUnavailableUsageLimits,
   makeUsageLimits,
 } from "@t3tools/provider-core/server/usageLimits";
+import * as HostProcess from "@t3tools/shared/HostProcess";
 
 const AuthFile = Schema.Struct({ "opencode-go": Schema.optionalKey(Schema.Unknown) });
 const ApiAuth = Schema.Struct({ type: Schema.Literal("api"), key: Schema.String });
@@ -74,7 +76,11 @@ export const readOpenCodeGoUsageLimits = Effect.fn("readOpenCodeGoUsageLimits")(
     const env = input.environment;
     const dataHome =
       env.XDG_DATA_HOME ||
-      path.join(env.HOME || env.USERPROFILE || NodeOS.homedir(), ".local", "share");
+      path.join(
+        env.HOME || env.USERPROFILE || (yield* HostProcess.HomeDirectory),
+        ".local",
+        "share",
+      );
     // OpenCode 2 writes only to its database, so an auth.json key that
     // disagrees with it is a stale OpenCode 1 leftover. Inline auth content
     // is an explicit override and bypasses the database.
