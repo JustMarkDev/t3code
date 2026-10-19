@@ -110,17 +110,22 @@ it.effect("reads a Go API key from OpenCode 2's credential database", () =>
       JSON.stringify({ "opencode-go": { type: "api", key: "stale-file-key" } }),
     );
     const database = new NodeSqlite.DatabaseSync(`${dataHome}/opencode/opencode.db`);
+    // OpenCode 2's credential table, minus columns this read never touches.
     database.exec(
-      "CREATE TABLE credential (integration_id text, value text, active integer, time_updated integer)",
+      "CREATE TABLE credential (id text PRIMARY KEY, integration_id text, value text NOT NULL, active integer, time_created integer NOT NULL)",
     );
-    const insert = database.prepare("INSERT INTO credential VALUES (?, ?, ?, ?)");
+    const insert = database.prepare("INSERT INTO credential VALUES (?, ?, ?, ?, ?)");
     // A Console login and an inactive Go key must lose to the active Go key,
     // even when the inactive one is newer.
-    insert.run("opencode", JSON.stringify({ type: "oauth", access: "console-token" }), 1, 3);
-    insert.run("opencode-go", JSON.stringify({ type: "key", key: "old-key" }), 0, 9);
-    insert.run("opencode-go", JSON.stringify({ type: "key", key: "db-key" }), 1, 1);
-    // A newer legacy row (NULL active) ranks behind an explicitly active one.
-    insert.run("opencode-go", JSON.stringify({ type: "key", key: "legacy-key" }), null, 8);
+    insert.run(
+      "cred_1",
+      "opencode",
+      JSON.stringify({ type: "oauth", access: "console-token" }),
+      1,
+      3,
+    );
+    insert.run("cred_2", "opencode-go", JSON.stringify({ type: "key", key: "old-key" }), 0, 9);
+    insert.run("cred_3", "opencode-go", JSON.stringify({ type: "key", key: "db-key" }), 1, 1);
     database.close();
 
     const resetsAt = "2026-09-17T12:00:00.000Z";
